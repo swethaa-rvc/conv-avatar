@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Avatar Assistant</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f11;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #1a1a1e;
+      padding: 12px 20px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .header-title { text-align: center; }
+    header h1 { font-size: 1.4rem; margin: 0; }
+    header small { color: #888; font-size: 0.82rem; }
+
+    /* ── Avatar toggle switch in header ── */
+    .avatar-toggle-wrap {
+      position: absolute;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .avatar-toggle-label {
+      font-size: 0.8rem;
+      color: #aaa;
+      user-select: none;
+    }
+    #avatarToggleInput { display: none; }
+    .avatar-toggle-track {
+      position: relative;
+      width: 52px;
+      height: 28px;
+      background: #d0d0d0;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.25s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    }
+    #avatarToggleInput:checked + .avatar-toggle-track {
+      background: #111;
+    }
+    .avatar-toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    }
+    #avatarToggleInput:checked + .avatar-toggle-track .avatar-toggle-thumb {
+      transform: translateX(24px);
+    }
+    .main { flex: 1; display: flex; min-height: 0; }
+    .avatar-column {
+      width: 420px;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #222;
+      transition: width 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+    }
+    .avatar-column.hidden {
+      width: 0;
+      opacity: 0;
+      border-right: none;
+      pointer-events: none;
+    }
+    #avatarCanvas {
+      width: 100%;
+      height: 480px;
+      background: #0a0a0c;
+    }
+    .avatar-info { padding: 12px; font-size: 0.9rem; color: #aaa; }
+    .avatar-info strong { color: #4fc; }
+
+    .camera-controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+    .camera-btn {
+      width: 42px;
+      height: 42px;
+      background: rgba(255, 255, 255, 0.95);
+      border: none;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      transition: all 0.2s;
+      font-size: 18px;
+      color: #333;
+    }
+    .camera-btn:hover {
+      background: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      transform: translateY(-1px);
+    }
+    .camera-btn:active {
+      transform: translateY(0);
+    }
+    
+    .chat-column { flex: 1; display: flex; flex-direction: column; }
+    #chatContainer { flex: 1; overflow-y: auto; padding: 16px; background: #151518; }
+    .message { margin: 10px 0; max-width: 80%; line-height: 1.45; }
+    .message.user { margin-left: auto; text-align: right; }
+    .message-content {
+      display: inline-block;
+      padding: 10px 14px;
+      border-radius: 18px;
+      word-wrap: break-word;
+    }
+    .message.user .message-content { background: #2a5bd7; color: white; border-bottom-right-radius: 4px; }
+    .message.assistant .message-content { background: #2a2a30; border: 1px solid #3a3a44; border-bottom-left-radius: 4px; }
+    .input-area { padding: 12px 16px; background: #1a1a1e; border-top: 1px solid #333; }
+    .input-wrapper { display: flex; gap: 8px; margin-bottom: 10px; }
+    #userInput {
+      flex: 1;
+      padding: 11px 16px;
+      border: 1px solid #444;
+      border-radius: 999px;
+      background: #222;
+      color: white;
+      font-size: 1rem;
+    }
+    #userInput:focus { outline: none; border-color: #4fc; }
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.13s;
+    }
+    .btn-primary { background: #4a6bff; color: white; }
+    .btn-primary:hover { background: #5a7aff; }
+    .btn-voice { background: #333; color: #ddd; border: 1px solid #555; }
+    .btn-voice.recording {
+      background: #c94;
+      color: white;
+      border-color: #b74;
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status { text-align: center; padding: 8px; color: #888; font-size: 0.9rem; }
+    .error { background: #420; color: #ff9; padding: 10px 14px; border-radius: 8px; margin: 8px 16px; }
+    @media (max-width: 900px) {
+      .main { flex-direction: column; }
+      .avatar-column { width: 100%; border-right: none; border-bottom: 1px solid #222; }
+      .avatar-column.hidden { width: 100%; max-height: 0; opacity: 0; border-bottom: none; }
+      #avatarCanvas { height: 400px; }
+      .camera-controls { top: 8px; right: 8px; }
+      .camera-btn { width: 38px; height: 38px; font-size: 16px; }
+      #toggleAvatarBtn { font-size: 0.76rem; padding: 5px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-title">
+      <h1>AI Avatar Assistant</h1>
+      <small>Azure STT × ElevenLabs × 3D Avatar</small>
+    </div>
+    <div class="avatar-toggle-wrap">
+      <span class="avatar-toggle-label" id="avatarToggleLbl">Avatar On</span>
+      <input type="checkbox" id="avatarToggleInput" checked onchange="toggleAvatar(this)">
+      <label class="avatar-toggle-track" for="avatarToggleInput">
+        <span class="avatar-toggle-thumb"></span>
+      </label>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="avatar-column">
+      <div style="position: relative;">
+        <canvas id="avatarCanvas"></canvas>
+
+        <!-- Camera Controls (floating buttons) -->
+        <div class="camera-controls">
+          <button class="camera-btn" onclick="handleZoomIn()" title="Zoom In">🔍+</button>
+          <button class="camera-btn" onclick="handleZoomOut()" title="Zoom Out">🔍-</button>
+          <button class="camera-btn" onclick="handleMoveUp()" title="Move Up">▲</button>
+          <button class="camera-btn" onclick="handleMoveDown()" title="Move Down">▼</button>
+          <button class="camera-btn" onclick="handleReset()" title="Reset View">↻</button>
+        </div>
+      </div>
+
+      <div class="avatar-info">
+        Status: <strong id="avatarStatus">Loading...</strong><br>
+        Model: <code>/static/woman.glb</code><br>
+        💡 <em>Drag to rotate • Use buttons to zoom/move</em><br>
+        <div style="display: flex; gap: 4px; margin-top: 8px;">
+          <button onclick="testLipSync()" style="padding: 4px 8px; cursor: pointer; font-size: 0.85rem;">Test Visemes</button>
+          <button onclick="testExpressions()" style="padding: 4px 8px; cursor: pointer; font-size: 0.85rem;">Test Expressions</button>
+        </div>
+        <span id="lipSyncInfo" style="display: block; margin-top: 4px; font-size: 0.8rem; color: #888;"></span>
+      </div>
+    </div>
+
+    <div class="chat-column">
+      <div id="chatContainer">
+        <div class="message assistant">
+          <div class="message-content">
+            Hello! I'm your voice-enabled AI avatar.<br>
+            Type or speak to start.
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div id="errorContainer"></div>
+
+        <div class="input-wrapper">
+          <input id="userInput" placeholder="Type your message..." autocomplete="off"/>
+          <button class="btn btn-primary" id="sendBtn">Send</button>
+        </div>
+
+        <div class="controls">
+          <button class="btn btn-voice" id="voiceBtn">
+            🎤 <span id="voiceBtnText">Start Voice</span>
+          </button>
+
+          <select id="voiceSelect">
+            <option value="">Select voice...</option>
+          </select>
+
+          <button class="btn" id="clearBtn">Clear Chat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  let scene, camera, renderer, avatar, mixer, controls;
+  let isSpeaking = false;
+  let audioAnalyser, audioDataArray, audioContext;
+
+  // Camera control state (matching React component)
+  // Woman avatar config: scale=1.5, position=[0,-1.2,0]
+  // Adjusted for headshot framing (shoulders up only)
+  let cameraDistance = 0.7;  // Close-up for face only
+  let cameraY = 1.35;  // Eye level on the model
+
+  const canvas = document.getElementById('avatarCanvas');
+
+  // ── Viseme and Lip Sync System ──────────────────────────────────────
+  // Standard ARKit mapping matching char30.glb (640 blend shapes)
+  // Azure Speech Service Viseme IDs (0-21) mapped to ARKit blend shapes
+  const visemeToMorphTargets = {
+    0: { 'mouthClose': 0.4 }, // Silence
+    1: { 'mouthFunnel': 0.25, 'jawOpen': 0.15 }, // ae, ax, ah
+    2: { 'jawOpen': 0.4, 'mouthFunnel': 0.2 }, // aa (open)
+    3: { 'mouthPucker': 0.35, 'mouthFunnel': 0.2 }, // ao
+    4: { 'mouthSmileLeft': 0.4, 'mouthSmileRight': 0.4 }, // ey (smile)
+    5: { 'mouthStretchLeft': 0.35, 'mouthStretchRight': 0.35, 'jawOpen': 0.1 }, // eh
+    6: { 'mouthShrugUpper': 0.25, 'mouthFunnel': 0.15 }, // uh
+    7: { 'mouthFunnel': 0.35, 'mouthPucker': 0.2 }, // o (round)
+    8: { 'mouthPucker': 0.4, 'jawOpen': 0.1 }, // u (pucker)
+    9: { 'mouthPucker': 0.45, 'mouthFunnel': 0.25 }, // ow
+    10: { 'jawOpen': 0.3, 'mouthFunnel': 0.2 }, // aw
+    11: { 'mouthPucker': 0.3, 'mouthSmileLeft': 0.15, 'mouthSmileRight': 0.15 }, // oy
+    12: { 'jawOpen': 0.35, 'mouthSmileLeft': 0.2, 'mouthSmileRight': 0.2 }, // ay
+    13: { 'mouthSmileLeft': 0.45, 'mouthSmileRight': 0.45, 'mouthStretchLeft': 0.25, 'mouthStretchRight': 0.25 }, // iy (wide smile)
+    14: { 'mouthPressLeft': 0.4, 'mouthPressRight': 0.4, 'mouthClose': 0.3 }, // p, b, m (lips together)
+    15: { 'mouthLowerDownLeft': 0.4, 'mouthLowerDownRight': 0.4, 'mouthUpperUpLeft': 0.15, 'mouthUpperUpRight': 0.15 }, // f, v (teeth on lip)
+    16: { 'tongueOut': 0.35, 'mouthLowerDownLeft': 0.2, 'mouthLowerDownRight': 0.2 }, // th (tongue)
+    17: { 'jawOpen': 0.2, 'mouthFunnel': 0.15 }, // t, d
+    18: { 'jawOpen': 0.25, 'mouthShrugLower': 0.15 }, // k, g
+    19: { 'mouthFunnel': 0.35, 'mouthPucker': 0.2, 'jawOpen': 0.15 }, // ch, jh, sh
+    20: { 'mouthSmileLeft': 0.2, 'mouthSmileRight': 0.2, 'mouthStretchLeft': 0.15, 'mouthStretchRight': 0.15 }, // s, z (slight smile)
+    21: { 'mouthShrugLower': 0.25, 'jawOpen': 0.15 }, // r (using shrugLower instead of rollLower)
+  };
+
+  // ARKit blend shape name mappings (standard Apple ARKit names + common variations)
+  const morphTargetAliases = {
+    // Mouth - ARKit standard names + alternatives
+    'mouthClose': ['mouthClose', 'mouth_close', 'Close', 'viseme_sil'],
+    'mouthFunnel': ['mouthFunnel', 'mouth_funnel', 'Funnel', 'viseme_O'],
+    'mouthPucker': ['mouthPucker', 'mouth_pucker', 'Pucker', 'viseme_U'],
+    'mouthLeft': ['mouthLeft', 'mouth_left'],
+    'mouthRight': ['mouthRight', 'mouth_right'],
+    'mouthSmileLeft': ['mouthSmileLeft', 'mouth_smile_left', 'Smile', 'smileFace'],
+    'mouthSmileRight': ['mouthSmileRight', 'mouth_smile_right'],
+    'mouthFrownLeft': ['mouthFrownLeft', 'mouth_frown_left'],
+    'mouthFrownRight': ['mouthFrownRight', 'mouth_frown_right'],
+    'mouthDimpleLeft': ['mouthDimpleLeft', 'mouth_dimple_left'],
+    'mouthDimpleRight': ['mouthDimpleRight', 'mouth_dimple_right'],
+    'mouthStretchLeft': ['mouthStretchLeft', 'mouth_stretch_left'],
+    'mouthStretchRight': ['mouthStretchRight', 'mouth_stretch_right'],
+    'mouthRollLower': ['mouthRollLower', 'mouth_roll_lower'],
+    'mouthRollUpper': ['mouthRollUpper', 'mouth_roll_upper'],
+    'mouthShrugLower': ['mouthShrugLower', 'mouth_shrug_lower'],
+    'mouthShrugUpper': ['mouthShrugUpper', 'mouth_shrug_upper'],
+    'mouthPressLeft': ['mouthPressLeft', 'mouth_press_left', 'viseme_PP'],
+    'mouthPressRight': ['mouthPressRight', 'mouth_press_right'],
+    'mouthLowerDownLeft': ['mouthLowerDownLeft', 'mouth_lower_down_left', 'lowerLipDown'],
+    'mouthLowerDownRight': ['mouthLowerDownRight', 'mouth_lower_down_right'],
+    'mouthUpperUpLeft': ['mouthUpperUpLeft', 'mouth_upper_up_left', 'upperLipUp'],
+    'mouthUpperUpRight': ['mouthUpperUpRight', 'mouth_upper_up_right'],
+
+    // Jaw - ARKit standard names + alternatives
+    'jawForward': ['jawForward', 'jaw_forward'],
+    'jawLeft': ['jawLeft', 'jaw_left'],
+    'jawRight': ['jawRight', 'jaw_right'],
+    'jawOpen': ['jawOpen', 'jaw_open', 'JawOpen', 'Open', 'mouthOpen', 'viseme_aa'],
+
+    // Eyes - ARKit standard names + alternatives
+    'eyeBlinkLeft': ['eyeBlinkLeft', 'eye_blink_left', 'upperLids', 'lowerLids'],
+    'eyeBlinkRight': ['eyeBlinkRight', 'eye_blink_right'],
+    'eyeLookDownLeft': ['eyeLookDownLeft', 'eye_look_down_left'],
+    'eyeLookDownRight': ['eyeLookDownRight', 'eye_look_down_right'],
+    'eyeLookInLeft': ['eyeLookInLeft', 'eye_look_in_left'],
+    'eyeLookInRight': ['eyeLookInRight', 'eye_look_in_right'],
+    'eyeLookOutLeft': ['eyeLookOutLeft', 'eye_look_out_left'],
+    'eyeLookOutRight': ['eyeLookOutRight', 'eye_look_out_right'],
+    'eyeLookUpLeft': ['eyeLookUpLeft', 'eye_look_up_left'],
+    'eyeLookUpRight': ['eyeLookUpRight', 'eye_look_up_right'],
+    'eyeSquintLeft': ['eyeSquintLeft', 'eye_squint_left'],
+    'eyeSquintRight': ['eyeSquintRight', 'eye_squint_right'],
+    'eyeWideLeft': ['eyeWideLeft', 'eye_wide_left'],
+    'eyeWideRight': ['eyeWideRight', 'eye_wide_right'],
+
+    // Brows - ARKit standard names + alternatives
+    'browDownLeft': ['browDownLeft', 'brow_down_left', 'angryFace'],
+    'browDownRight': ['browDownRight', 'brow_down_right'],
+    'browInnerUp': ['browInnerUp', 'brow_inner_up', 'eyeBrow', 'foreHead'],
+    'browOuterUpLeft': ['browOuterUpLeft', 'brow_outer_up_left'],
+    'browOuterUpRight': ['browOuterUpRight', 'brow_outer_up_right'],
+
+    // Cheeks - ARKit standard names + alternatives
+    'cheekPuff': ['cheekPuff', 'cheek_puff'],
+    'cheekSquintLeft': ['cheekSquintLeft', 'cheek_squint_left'],
+    'cheekSquintRight': ['cheekSquintRight', 'cheek_squint_right'],
+
+    // Nose - ARKit standard names + alternatives
+    'noseSneerLeft': ['noseSneerLeft', 'nose_sneer_left', 'nose'],
+    'noseSneerRight': ['noseSneerRight', 'nose_sneer_right'],
+
+    // Tongue - ARKit standard names + alternatives
+    'tongueOut': ['tongueOut', 'tongue_out', 'TongueOut']
+  };
+
+  let currentMorphTargets = {};
+  let targetMorphTargets = {};
+  let morphTargetNameMap = {}; // Maps standard names to actual names in model
+
+  function initializeMorphTargetMap() {
+    if (!window.morphTargetMesh || !window.morphTargetMesh.morphTargetDictionary) {
+      document.getElementById('lipSyncInfo').textContent = '⚠️ No morph targets found';
+      console.warn("No mesh with morph targets found!");
+      return;
+    }
+
+    const dictionary = window.morphTargetMesh.morphTargetDictionary;
+    console.log("=== Initializing ARKit Morph Target Map ===");
+    console.log("Available morph targets:", Object.keys(dictionary));
+    console.log("Total available:", Object.keys(dictionary).length);
+
+    let mappedCount = 0;
+    let missingTargets = [];
+
+    // Create reverse mapping from actual names to standard names
+    for (const standardName in morphTargetAliases) {
+      const aliases = morphTargetAliases[standardName];
+      let found = false;
+
+      for (const alias of aliases) {
+        if (dictionary.hasOwnProperty(alias)) {
+          morphTargetNameMap[standardName] = alias;
+          console.log(`✅ Mapped ${standardName} -> ${alias} (index: ${dictionary[alias]})`);
+          mappedCount++;
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        missingTargets.push(standardName);
+      }
+    }
+
+    console.log(`\n✅ Successfully mapped: ${mappedCount} morph targets`);
+    if (missingTargets.length > 0) {
+      console.log(`⚠️ Missing ${missingTargets.length} targets:`, missingTargets);
+    }
+    console.log("Morph target map:", morphTargetNameMap);
+    console.log("===========================================\n");
+
+    document.getElementById('lipSyncInfo').textContent =
+      `✓ ${mappedCount} ARKit shapes mapped` +
+      (missingTargets.length > 0 ? ` (${missingTargets.length} missing)` : '');
+  }
+
+  // Test function to cycle through visemes (ARKit version)
+  function testLipSync() {
+    console.log("Testing ARKit lip sync with char30 mappings...");
+    const visemes = [0, 1, 2, 3, 4, 5, 7, 8, 9, 13, 14, 15, 16, 19, 20, 21];
+    const visemeNames = {
+      0: 'Silence (mouthClose)',
+      1: 'ae/ax/ah (mouthFunnel + jawOpen)',
+      2: 'aa open (jawOpen + mouthFunnel)',
+      3: 'ao (mouthPucker + mouthFunnel)',
+      4: 'ey smile (mouthSmileLeft/Right)',
+      5: 'eh (mouthStretchLeft/Right)',
+      7: 'o round (mouthFunnel + mouthPucker)',
+      8: 'u pucker (mouthPucker)',
+      9: 'ow (mouthPucker + mouthFunnel)',
+      13: 'iy wide smile (mouthSmile + mouthStretch)',
+      14: 'p/b/m lips (mouthPressLeft/Right)',
+      15: 'f/v teeth (mouthLowerDown + mouthUpperUp)',
+      16: 'th tongue (tongueOut)',
+      19: 'ch/sh (mouthFunnel + mouthPucker)',
+      20: 's/z (mouthSmile + mouthStretch)',
+      21: 'r (mouthShrugLower)'
+    };
+
+    let index = 0;
+    const interval = setInterval(() => {
+      if (index >= visemes.length) {
+        clearInterval(interval);
+        resetMouthToNeutral();
+        console.log("✅ Lip sync test complete");
+        document.getElementById('lipSyncInfo').textContent += ' | Test complete!';
+        return;
+      }
+
+      const visemeId = visemes[index];
+      console.log(`Testing viseme ${visemeId}: ${visemeNames[visemeId]}`);
+      document.getElementById('lipSyncInfo').textContent = `Testing: ${visemeNames[visemeId]}`;
+      setViseme(visemeId);
+      index++;
+    }, 1000);
+  }
+
+  function setViseme(visemeId) {
+    const morphTargets = visemeToMorphTargets[visemeId];
+    if (!morphTargets) return;
+
+    targetMorphTargets = { ...morphTargets };
+  }
+
+  function getNeutralPose() {
+    return {
+      // Mouth
+      'mouthClose': 0,
+      'mouthFunnel': 0,
+      'mouthPucker': 0,
+      'mouthLeft': 0,
+      'mouthRight': 0,
+      'mouthSmileLeft': 0,
+      'mouthSmileRight': 0,
+      'mouthFrownLeft': 0,
+      'mouthFrownRight': 0,
+      'mouthDimpleLeft': 0,
+      'mouthDimpleRight': 0,
+      'mouthStretchLeft': 0,
+      'mouthStretchRight': 0,
+      'mouthRollLower': 0,
+      'mouthRollUpper': 0,
+      'mouthShrugLower': 0,
+      'mouthShrugUpper': 0,
+      'mouthPressLeft': 0,
+      'mouthPressRight': 0,
+      'mouthLowerDownLeft': 0,
+      'mouthLowerDownRight': 0,
+      'mouthUpperUpLeft': 0,
+      'mouthUpperUpRight': 0,
+
+      // Jaw
+      'jawForward': 0,
+      'jawLeft': 0,
+      'jawRight': 0,
+      'jawOpen': 0,
+
+      // Eyes
+      'eyeBlinkLeft': 0,
+      'eyeBlinkRight': 0,
+      'eyeLookDownLeft': 0,
+      'eyeLookDownRight': 0,
+      'eyeLookInLeft': 0,
+      'eyeLookInRight': 0,
+      'eyeLookOutLeft': 0,
+      'eyeLookOutRight': 0,
+      'eyeLookUpLeft': 0,
+      'eyeLookUpRight': 0,
+      'eyeSquintLeft': 0,
+      'eyeSquintRight': 0,
+      'eyeWideLeft': 0,
+      'eyeWideRight': 0,
+
+      // Brows
+      'browDownLeft': 0,
+      'browDownRight': 0,
+      'browInnerUp': 0,
+      'browOuterUpLeft': 0,
+      'browOuterUpRight': 0,
+
+      // Cheeks
+      'cheekPuff': 0,
+      'cheekSquintLeft': 0,
+      'cheekSquintRight': 0,
+
+      // Nose
+      'noseSneerLeft': 0,
+      'noseSneerRight': 0,
+
+      // Tongue
+      'tongueOut': 0,
+    };
+  }
+
+  function resetMouthToNeutral() {
+    targetMorphTargets = {};
+  }
+
+  // Expression presets matching char30
+  const expressionPresets = {
+    neutral: getNeutralPose(),
+    happy: {
+      'mouthSmileLeft': 0.8,
+      'mouthSmileRight': 0.8,
+      'cheekSquintLeft': 0.6,
+      'cheekSquintRight': 0.6,
+      'eyeSquintLeft': 0.3,
+      'eyeSquintRight': 0.3,
+    },
+    sad: {
+      'mouthFrownLeft': 0.7,
+      'mouthFrownRight': 0.7,
+      'browDownLeft': 0.5,
+      'browDownRight': 0.5,
+      'browInnerUp': 0.4,
+    },
+    surprised: {
+      'jawOpen': 0.7,
+      'eyeWideLeft': 0.9,
+      'eyeWideRight': 0.9,
+      'browInnerUp': 0.8,
+      'browOuterUpLeft': 0.8,
+      'browOuterUpRight': 0.8,
+      'mouthFunnel': 0.5,
+    },
+    thinking: {
+      'mouthPucker': 0.4,
+      'browDownLeft': 0.3,
+      'eyeLookUpLeft': 0.3,
+      'eyeLookUpRight': 0.3,
+    },
+    angry: {
+      'browDownLeft': 0.8,
+      'browDownRight': 0.8,
+      'mouthFrownLeft': 0.6,
+      'mouthFrownRight': 0.6,
+      'mouthPressLeft': 0.5,
+      'mouthPressRight': 0.5,
+      'noseSneerLeft': 0.4,
+      'noseSneerRight': 0.4,
+      'jawForward': 0.3,
+    },
+  };
+
+  // Optional: Function to apply expression presets
+  function setExpression(expressionName) {
+    const expression = expressionPresets[expressionName];
+    if (expression) {
+      targetMorphTargets = { ...targetMorphTargets, ...expression };
+    }
+  }
+
+  // Test expressions
+  function testExpressions() {
+    console.log("Testing ARKit expressions...");
+    const expressions = ['neutral', 'happy', 'sad', 'surprised', 'thinking', 'angry'];
+    let index = 0;
+
+    const interval = setInterval(() => {
+      if (index >= expressions.length) {
+        clearInterval(interval);
+        resetMouthToNeutral();
+        console.log("✅ Expression test complete");
+        document.getElementById('lipSyncInfo').textContent = '✓ Expression test complete!';
+        return;
+      }
+
+      const exprName = expressions[index];
+      console.log(`Testing expression: ${exprName}`);
+      document.getElementById('lipSyncInfo').textContent = `Testing expression: ${exprName}`;
+      setExpression(exprName);
+      index++;
+    }, 1500);
+  }
+
+  function updateMorphTargets() {
+    const meshes = window.morphTargetMeshes;
+    if (!meshes || meshes.length === 0) {
+      return;
+    }
+
+    const blendSpeed = 0.15;
+
+    // Smoothly blend current values toward target values
+    for (const standardName in targetMorphTargets) {
+      const targetValue = targetMorphTargets[standardName];
+      const currentValue = currentMorphTargets[standardName] || 0;
+      const newValue = currentValue + (targetValue - currentValue) * blendSpeed;
+      currentMorphTargets[standardName] = newValue;
+
+      // Apply to actual morph target on ALL meshes
+      const actualName = morphTargetNameMap[standardName];
+      if (actualName) {
+        for (const mesh of meshes) {
+          if (mesh.morphTargetDictionary && mesh.morphTargetDictionary.hasOwnProperty(actualName)) {
+            const index = mesh.morphTargetDictionary[actualName];
+            mesh.morphTargetInfluences[index] = THREE.MathUtils.clamp(newValue, 0, 1);
+          }
+        }
+      }
+    }
+
+    // Decay values not in target
+    for (const standardName in currentMorphTargets) {
+      if (!targetMorphTargets.hasOwnProperty(standardName)) {
+        const currentValue = currentMorphTargets[standardName];
+        const newValue = currentValue * (1 - blendSpeed);
+        currentMorphTargets[standardName] = newValue;
+
+        const actualName = morphTargetNameMap[standardName];
+        if (actualName) {
+          for (const mesh of meshes) {
+            if (mesh.morphTargetDictionary && mesh.morphTargetDictionary.hasOwnProperty(actualName)) {
+              const index = mesh.morphTargetDictionary[actualName];
+              mesh.morphTargetInfluences[index] = THREE.MathUtils.clamp(newValue, 0, 1);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function initAvatar() {
+    scene = new THREE.Scene();
+    // Neutral background so the avatar is always visible
+    scene.background = new THREE.Color(0xe8e8ec);
+
+    // Ensure canvas has real dimensions (flexbox race guard)
+    const cw = canvas.clientWidth  || canvas.parentElement.clientWidth  || 420;
+    const ch = canvas.clientHeight || canvas.parentElement.clientHeight || 480;
+    console.log('[initAvatar] canvas size:', cw, 'x', ch);
+
+    camera = new THREE.PerspectiveCamera(50, cw / ch, 0.01, 1000);
+    updateCameraPosition();
+
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+      alpha: false
+    });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(cw, ch, false);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.7;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+
+    // Darker, more natural lighting to preserve skin tone
+    // Ambient light - reduced to prevent washing out texture
+    scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+
+    // Key light (main) - reduced intensity
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    keyLight.position.set(5, 8, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.far = 50;
+    keyLight.shadow.camera.left = -10;
+    keyLight.shadow.camera.right = 10;
+    keyLight.shadow.camera.top = 10;
+    keyLight.shadow.camera.bottom = -10;
+    scene.add(keyLight);
+
+    // Fill light (softer) - warm tone, reduced
+    const fillLight = new THREE.DirectionalLight(0xfff5e6, 0.4);
+    fillLight.position.set(-5, 5, -3);
+    scene.add(fillLight);
+
+    // Rim light (back) - cool tone, reduced
+    const rimLight = new THREE.DirectionalLight(0xe6f2ff, 0.3);
+    rimLight.position.set(0, 3, -5);
+    scene.add(rimLight);
+
+    // Front fill - reduced to avoid washing out
+    const frontFill = new THREE.PointLight(0xffffff, 0.25);
+    frontFill.position.set(0, 1, 3);
+    scene.add(frontFill);
+
+    // Subtle side lights - warm and cool
+    const leftSide = new THREE.PointLight(0xffebcc, 0.15);
+    leftSide.position.set(-3, 2, 0);
+    scene.add(leftSide);
+
+    const rightSide = new THREE.PointLight(0xcce6ff, 0.15);
+    rightSide.position.set(3, 2, 0);
+    scene.add(rightSide);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, cameraY, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enableZoom = false; // Use buttons instead
+    controls.enablePan = false;
+    controls.minDistance = 0.4;  // Allow very close zoom
+    controls.maxDistance = 6;    // Matching React: maxDistance
+
+    animate();
+  }
+
+  // Update camera position and target
+  function updateCameraPosition() {
+    if (!camera) return;
+    camera.position.set(0, cameraY, cameraDistance);
+    if (controls) {
+      controls.target.set(0, cameraY, 0);
+    }
+    camera.updateProjectionMatrix();
+  }
+
+  // Camera control functions (matching React component)
+  function handleZoomIn() {
+    cameraDistance = Math.max(1.5, cameraDistance - 0.5);  // Matching React increment
+    updateCameraPosition();
+  }
+
+  function handleZoomOut() {
+    cameraDistance = Math.min(6, cameraDistance + 0.5);   // Matching React increment
+    updateCameraPosition();
+  }
+
+  function handleMoveUp() {
+    cameraY += 0.3;  // Matching React: no upper limit
+    updateCameraPosition();
+  }
+
+  function handleMoveDown() {
+    cameraY -= 0.3;  // Matching React: no lower limit
+    updateCameraPosition();
+  }
+
+  function handleReset() {
+    cameraDistance = 0.7;
+    cameraY = 1.35;
+    updateCameraPosition();
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    if (mixer) mixer.update(0.016);
+
+    // Audio-driven lip sync with ARKit visemes
+    if (isSpeaking && audioAnalyser) {
+      audioAnalyser.getByteFrequencyData(audioDataArray);
+      const vol = audioDataArray.reduce((a,b)=>a+b,0) / (audioDataArray.length * 255);
+
+      // Debug: log volume periodically
+      if (!window._lipSyncDebugTimer || Date.now() - window._lipSyncDebugTimer > 500) {
+        console.log("[LipSync] vol:", vol.toFixed(3), "meshes:", (window.morphTargetMeshes||[]).length);
+        window._lipSyncDebugTimer = Date.now();
+      }
+
+      // Analyze frequency bands to approximate phonemes
+      const lowFreq = audioDataArray.slice(0, 8).reduce((a,b)=>a+b,0) / (8 * 255);      // 0-700Hz
+      const midLowFreq = audioDataArray.slice(8, 20).reduce((a,b)=>a+b,0) / (12 * 255); // 700-1750Hz
+      const midFreq = audioDataArray.slice(20, 35).reduce((a,b)=>a+b,0) / (15 * 255);   // 1750-3000Hz
+      const highFreq = audioDataArray.slice(35, 60).reduce((a,b)=>a+b,0) / (25 * 255);  // 3000-5000Hz
+
+      // Map frequency patterns to ARKit visemes
+      if (vol > 0.12) {
+        // High frequency (sibilants: s, z, sh, ch)
+        if (highFreq > 0.45) {
+          setViseme(Math.random() > 0.3 ? 20 : 19); // s/z or ch/sh
+        }
+        // Mid-high frequency (front vowels: ee, ey)
+        else if (midFreq > 0.5 && midLowFreq > 0.3) {
+          setViseme(Math.random() > 0.5 ? 13 : 4); // iy (wide smile) or ey
+        }
+        // Mid frequency with high energy (open vowels: aa, ah)
+        else if (midLowFreq > 0.5 && lowFreq > 0.35) {
+          setViseme(Math.random() > 0.5 ? 2 : 1); // aa (open) or ae/ah
+        }
+        // Low frequency (rounded vowels: o, u, ow)
+        else if (lowFreq > 0.4) {
+          const rand = Math.random();
+          if (rand > 0.66) setViseme(7);      // o (round)
+          else if (rand > 0.33) setViseme(8); // u (pucker)
+          else setViseme(9);                   // ow
+        }
+        // Consonant patterns
+        else if (midFreq > 0.4 && vol > 0.2) {
+          const rand = Math.random();
+          if (rand > 0.75) setViseme(14);      // p/b/m (lips together)
+          else if (rand > 0.5) setViseme(15);  // f/v (teeth on lip)
+          else if (rand > 0.25) setViseme(17); // t/d
+          else setViseme(21);                  // r
+        }
+        // Default speech
+        else {
+          setViseme(1); // ae/ax/ah
+        }
+      } else if (vol > 0.05) {
+        // Very low volume = slight mouth movement
+        setViseme(0); // mouthClose (subtle)
+      } else {
+        // Silence
+        resetMouthToNeutral();
+      }
+    } else {
+      // Not speaking = idle animations (blinking, subtle expression)
+      resetMouthToNeutral();
+
+      // Natural eye blinking
+      const time = Date.now() * 0.001;
+      if (!window._nextBlink) window._nextBlink = time + 2 + Math.random() * 4;
+      if (time > window._nextBlink) {
+        window._blinkStart = time;
+        window._nextBlink = time + 2 + Math.random() * 5;
+      }
+      if (window._blinkStart) {
+        const blinkElapsed = time - window._blinkStart;
+        if (blinkElapsed < 0.15) {
+          const blinkVal = Math.sin((blinkElapsed / 0.15) * Math.PI);
+          targetMorphTargets['eyeBlinkLeft'] = blinkVal;
+          targetMorphTargets['eyeBlinkRight'] = blinkVal;
+        } else {
+          delete targetMorphTargets['eyeBlinkLeft'];
+          delete targetMorphTargets['eyeBlinkRight'];
+          window._blinkStart = null;
+        }
+      }
+    }
+
+    // Update morph targets with smooth blending
+    updateMorphTargets();
+
+    renderer.render(scene, camera);
+  }
+
+  function loadAvatar() {
+    const loader = new THREE.GLTFLoader();
+    loader.load('/static/woman.glb', gltf => {
+      avatar = gltf.scene;
+
+      // Set avatar position and scale (matching React avatarConfig for woman.glb)
+      // Woman avatar: scale=1.5, position=[0,-1.2,0]
+      avatar.position.set(0, -1.2, 0);
+      avatar.scale.set(1.5, 1.5, 1.5);
+
+      // Fix materials: enable double-side, ensure visibility
+      avatar.traverse((child) => {
+        if (child.isMesh) {
+          child.frustumCulled = false;
+          if (child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(mat => {
+              mat.side = THREE.DoubleSide;
+              mat.needsUpdate = true;
+            });
+          }
+        }
+      });
+
+      scene.add(avatar);
+
+      // Manual camera framing for the face/upper body.
+      // Box3.setFromObject doesn't work on skinned meshes in r128.
+      // Model is scaled 1.5x and shifted y=-1.2, so the head is near y≈0.6
+      // Camera targets the face area for a headshot view.
+      const faceY = 1.35;      // eye level after scale 1.5 + offset y=-1.2
+      cameraY = faceY;
+      cameraDistance = 0.7;
+      camera.position.set(0, faceY, cameraDistance);
+      camera.near = 0.01;
+      camera.far = 1000;
+      camera.updateProjectionMatrix();
+      if (controls) {
+        controls.target.set(0, faceY, 0);
+        controls.update();
+      }
+      console.log('[loadAvatar] Camera set to face level — y:', faceY, 'dist:', cameraDistance);
+
+      // Log all morph targets for mapping
+      console.log("=== Avatar Model Loaded ===");
+      let meshesWithMorphs = 0;
+
+      avatar.traverse((child) => {
+        if (child.isMesh && child.morphTargetInfluences) {
+          meshesWithMorphs++;
+          console.log(`\n📦 Mesh #${meshesWithMorphs}: ${child.name || 'unnamed'}`);
+          console.log("  - Morph targets count:", child.morphTargetInfluences.length);
+
+          if (child.morphTargetDictionary) {
+            const morphNames = Object.keys(child.morphTargetDictionary);
+            console.log("  - Sample morph targets:", morphNames.slice(0, 10).join(', '));
+
+            // Detect model type
+            const hasARKit = morphNames.some(name => name.includes('mouth') || name.includes('jaw'));
+            const hasFACS = morphNames.some(name => name.includes('facs_'));
+            const hasViseme = morphNames.some(name => name.includes('viseme_'));
+
+            if (hasARKit) console.log("  ✅ ARKit blend shapes detected");
+            if (hasFACS) console.log("  ✅ FACS blend shapes detected");
+            if (hasViseme) console.log("  ✅ Viseme blend shapes detected");
+          }
+
+          // Store reference to ALL meshes with morph targets
+          if (!window.morphTargetMeshes) {
+            window.morphTargetMeshes = [];
+          }
+          window.morphTargetMeshes.push(child);
+          console.log("  👉 Added mesh for lip sync:", child.name);
+
+          // Keep backward compat reference to first mesh (used for name mapping)
+          if (!window.morphTargetMesh) {
+            window.morphTargetMesh = child;
+          }
+        }
+      });
+
+      console.log(`\n📊 Total meshes with morph targets: ${meshesWithMorphs}`);
+      console.log("===========================\n");
+
+      // Initialize morph target mapping system
+      initializeMorphTargetMap();
+
+      if (gltf.animations?.length > 0) {
+        mixer = new THREE.AnimationMixer(avatar);
+        mixer.clipAction(gltf.animations[0]).play();
+      }
+
+      document.getElementById('avatarStatus').textContent = 'Ready ✓';
+    }, undefined, err => {
+      console.error("GLTF load error:", err);
+      document.getElementById('avatarStatus').textContent = 'Load failed';
+    });
+  }
+
+  // Handle window resize
+  window.addEventListener('resize', () => {
+    const cw = canvas.clientWidth  || canvas.parentElement.clientWidth  || 420;
+    const ch = canvas.clientHeight || canvas.parentElement.clientHeight || 480;
+    camera.aspect = cw / ch;
+    camera.updateProjectionMatrix();
+    renderer.setSize(cw, ch, false);
+  });
+
+  // ────────────────────────────────────────────────
+  //  Chat & Voice logic with barge-in / interruption
+  // ────────────────────────────────────────────────
+
+  const chatContainer  = document.getElementById('chatContainer');
+  const userInput      = document.getElementById('userInput');
+  const sendBtn        = document.getElementById('sendBtn');
+  const voiceBtn       = document.getElementById('voiceBtn');
+  const voiceBtnText   = document.getElementById('voiceBtnText');
+  const voiceSelect    = document.getElementById('voiceSelect');
+  const clearBtn       = document.getElementById('clearBtn');
+  const errorContainer = document.getElementById('errorContainer');
+
+  let isRecording = false;
+  let mediaRecorder, audioChunks = [];
+  let currentAudio = null;
+  const sessionId = 'sess_' + Date.now();
+  let selectedVoice = '21m00Tcm4TlvDq8ikWAM';
+
+  // ── Helper: Stop any currently playing speech ────────────────────────
+  function interruptSpeech() {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio.src = '';
+      currentAudio = null;
+      isSpeaking = false;
+      resetMouthToNeutral();
+      console.log("[INTERRUPT] Speech stopped");
+    }
+  }
+
+  // ── Fetch available voices ───────────────────────────────────────────
+  fetch('/api/voices')
+    .then(r => r.json())
+    .then(data => {
+      voiceSelect.innerHTML = '<option value="">Select voice...</option>';
+      (data.female || []).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.voice_id;
+        opt.textContent = v.display_name || v.name;
+        voiceSelect.appendChild(opt);
+      });
+      if (data.female?.[0]) {
+        voiceSelect.value = data.female[0].voice_id;
+        selectedVoice = data.female[0].voice_id;
+      }
+    })
+    .catch(() => {
+      voiceSelect.innerHTML += '<option>Failed to load voices</option>';
+    });
+
+  voiceSelect.onchange = e => selectedVoice = e.target.value;
+
+  // ── Voice button with interruption ───────────────────────────────────
+  voiceBtn.onclick = async () => {
+    if (isRecording) {
+      mediaRecorder.stop();
+      isRecording = false;
+      voiceBtn.classList.remove('recording');
+      voiceBtnText.textContent = 'Start Voice';
+    } else {
+      // Interrupt AI before starting to listen
+      interruptSpeech();
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, {type: 'audio/webm'});
+          transcribeAndSend(blob);
+          stream.getTracks().forEach(t => t.stop());
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        voiceBtn.classList.add('recording');
+        voiceBtnText.textContent = 'Stop';
+      } catch(e) {
+        showError("Microphone access denied or unavailable");
+        console.error(e);
+      }
+    }
+  };
+
+  async function transcribeAndSend(blob) {
+    const formData = new FormData();
+    formData.append('audio', blob, 'voice.webm');
+
+    try {
+      const r = await fetch('/api/stt', {method: 'POST', body: formData});
+      if (!r.ok) throw new Error("STT failed");
+      const {text} = await r.json();
+
+      if (text?.trim()) {
+        userInput.value = text;
+        sendMessage(text, true); // auto-send transcribed text + speak response
+      }
+    } catch(e) {
+      showError("Could not transcribe speech");
+      console.error(e);
+    }
+  }
+
+  // ── Send message with interruption ───────────────────────────────────
+  async function sendMessage(msg, shouldSpeak = true) {
+    if (!msg.trim()) return;
+
+    // Interrupt any ongoing AI speech
+    interruptSpeech();
+
+    addMessage(msg, true);
+    userInput.value = '';
+
+    try {
+      const r = await fetch('/api/opportunity', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          user_input: msg,
+          user_id: 'sathwick_07',
+          conversation_id: sessionId
+        })
+      });
+
+      if (!r.ok) throw new Error("Opportunity query failed");
+      const data = await r.json();
+
+      // Extract the reply text from whatever field the Revinci API returns
+      const response = data.response || data.answer || data.message || data.result || data.output || JSON.stringify(data);
+
+      addMessage(response, false);
+
+      if (shouldSpeak) {
+        await speak(response);
+      }
+    } catch(e) {
+      showError("Failed to get response");
+      console.error(e);
+    }
+  }
+
+  // ── Text-to-Speech with interruption support ─────────────────────────
+  async function speak(text) {
+    interruptSpeech(); // just in case
+
+    try {
+      const r = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, voice_id: selectedVoice})
+      });
+
+      if (!r.ok) throw new Error("TTS failed");
+
+      // Backend now streams audio/mpeg directly — no base64 needed
+      const blob = await r.blob();
+      if (!blob.size) throw new Error("No audio received");
+
+      const url = URL.createObjectURL(blob);
+
+      currentAudio = new Audio(url);
+
+      // Set up audio analyser for lip sync (create AudioContext once)
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        console.log("[TTS] AudioContext created");
+      }
+
+      // Resume audio context if suspended (browser autoplay policy)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        console.log("[TTS] AudioContext resumed");
+      }
+
+      // Create analyzer and source (new audio element each time, so this is safe)
+      try {
+        const source = audioContext.createMediaElementSource(currentAudio);
+        audioAnalyser = audioContext.createAnalyser();
+        audioAnalyser.fftSize = 256;
+        audioAnalyser.smoothingTimeConstant = 0.8; // Smooth out rapid changes
+        const bufferLength = audioAnalyser.frequencyBinCount;
+        audioDataArray = new Uint8Array(bufferLength);
+
+        source.connect(audioAnalyser);
+        audioAnalyser.connect(audioContext.destination);
+
+        console.log("[TTS] Lip sync enabled with audio analyser");
+      } catch (err) {
+        console.warn("[TTS] Could not create audio analyser:", err);
+        // Continue without analyser - will use simpler fallback
+      }
+
+      currentAudio.play().catch(e => console.warn("Autoplay blocked", e));
+
+      isSpeaking = true;
+
+      currentAudio.onended = () => {
+        isSpeaking = false;
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        resetMouthToNeutral();
+        console.log("[TTS] Playback finished");
+      };
+
+      currentAudio.onerror = () => {
+        isSpeaking = false;
+        currentAudio = null;
+        resetMouthToNeutral();
+        console.warn("[TTS] Playback error");
+      };
+    } catch(e) {
+      console.error("TTS error:", e);
+      showError("Could not generate speech");
+    }
+  }
+
+function addMessage(text, isUser) {
+    const div = document.createElement('div');
+    div.className = `message ${isUser ? 'user' : 'assistant'}`;
+    div.innerHTML = `<div class="message-content">${text}</div>`;
+    chatContainer.appendChild(div);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
+  function showError(msg) {
+    errorContainer.innerHTML = `<div class="error">⚠️ ${msg}</div>`;
+    setTimeout(() => errorContainer.innerHTML = '', 5000);
+  }
+
+  // ── Event listeners ──────────────────────────────────────────────────
+  sendBtn.onclick = () => sendMessage(userInput.value.trim());
+
+  userInput.onkeypress = e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(userInput.value.trim());
+    }
+  };
+
+  clearBtn.onclick = () => {
+    if (confirm('Clear conversation?')) {
+      chatContainer.innerHTML = '<div class="message assistant"><div class="message-content">Conversation cleared.</div></div>';
+      fetch('/api/clear', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({session_id: sessionId})
+      });
+      interruptSpeech();
+    }
+  };
+
+  // ── Avatar visibility toggle ─────────────────────────────────────────
+  function toggleAvatar(checkbox) {
+    const col = document.querySelector('.avatar-column');
+    const lbl = document.getElementById('avatarToggleLbl');
+    const on  = checkbox.checked;
+    col.classList.toggle('hidden', !on);
+    lbl.textContent = on ? 'Avatar On' : 'Avatar Off';
+  }
+
+  // ── Start everything ─────────────────────────────────────────────────
+  initAvatar();
+  loadAvatar();
+  userInput.focus();
+</script>
+</body>
+</html>

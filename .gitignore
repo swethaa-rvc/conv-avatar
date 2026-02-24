@@ -1,0 +1,13 @@
+# Markdown files
+*.md
+
+# Virtual environment (all variants)
+venv/
+venv*/
+.venv/
+env/
+.env/
+
+# Environment variables
+.env
+.env.*

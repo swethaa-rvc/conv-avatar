@@ -1059,7 +1059,7 @@ if __name__ == '__main__':
         print("✅ Azure STT: Configured")
     print("✅ ElevenLabs TTS: Configured")
     
-    print("\n🌐 Server: http://localhost:5001")
+    print("\n🌐 Server: https://localhost:5001")
     print("="*70 + "\n")
 
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True, ssl_context='adhoc')
